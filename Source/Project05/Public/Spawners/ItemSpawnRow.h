@@ -16,7 +16,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	// 하드 레퍼런스
 	// 클래스가 항상 메모리에 로드된 상테에서 바로 접근       //소프트는 클래스의 경로만 유지
-	TSubclassOf<AActor> ItemClass;
+	TSubclassOf<AActor> ItemClass = nullptr;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	float SpawnChance;
+	float SpawnChance = 0.0f;
 };

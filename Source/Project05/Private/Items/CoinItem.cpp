@@ -9,6 +9,8 @@ ACoinItem::ACoinItem()
 
 void ACoinItem::ActivateItem(AActor* Activator)
 {
+	Super::ActivateItem(Activator);
+	
 	// 액터가 있는지 확인 그 액터가 플레이어인지 확인 
 	if (Activator && Activator->ActorHasTag("Player"))
 	{

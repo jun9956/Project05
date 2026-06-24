@@ -13,7 +13,7 @@ AMyGameState::AMyGameState()
 	Score = 0;
 	SpawnedCoinCount = 0;
 	CollectedCoinCount = 0;
-	LevelDuration = 30.0f;
+	LevelDuration = 6000.0f;
 	CurrentLevelIndex = 0;
 	MaxLevels = 3;
 }
@@ -54,6 +54,14 @@ void AMyGameState::AddScore(int32 Amount)
 
 void AMyGameState::StartLevel()
 {
+	if (APlayerController* PlayerController = GetWorld()->GetFirstPlayerController())
+	{
+		if (ASantaPlayerController* SantaPlayerController = Cast<ASantaPlayerController>(PlayerController))
+		{
+			SantaPlayerController->ShowGameHUD();
+		}
+	}
+	
 	if (UGameInstance* GameInstance = GetGameInstance())
 	{
 		UMyGameInstance* MyGameInstance = Cast<UMyGameInstance>(GameInstance);
@@ -88,8 +96,6 @@ void AMyGameState::StartLevel()
 		}
 	}
 	
-	UpdateHUD();
-	
 	// 시간설정
 	GetWorldTimerManager().SetTimer(
 		LevelTimerHandle,
@@ -98,10 +104,6 @@ void AMyGameState::StartLevel()
 		LevelDuration,
 		false
 		);
-	
-	UE_LOG(LogTemp, Warning, TEXT("Level %d Start!, Spawned %d coin"),
-		CurrentLevelIndex + 1,
-		SpawnedCoinCount);
 }
 
 // 시간 끝나면 레벨끝내기
@@ -129,40 +131,46 @@ void AMyGameState::OnCoinCollected()
 void AMyGameState::EndLevel()
 {
 	GetWorldTimerManager().ClearTimer(LevelTimerHandle);
-	CurrentLevelIndex++;
 	
 	if (UGameInstance* GameInstance = GetGameInstance())
 	{
-		UMyGameInstance* MyGameInstance = Cast<UMyGameInstance>(GameInstance);
-		if (MyGameInstance)
+		UMyGameInstance* SpartaGameInstance = Cast<UMyGameInstance>(GameInstance);
+		if (SpartaGameInstance)
 		{
 			AddScore(Score);
-			MyGameInstance->CurrentLevelIndex = CurrentLevelIndex;
+			CurrentLevelIndex++;
+			SpartaGameInstance->CurrentLevelIndex = CurrentLevelIndex;
+			
+			if (CurrentLevelIndex >= MaxLevels)
+			{
+				OnGameOver();
+				return;
+			}
+			
+			if (LevelMapNames.IsValidIndex(CurrentLevelIndex))
+			{
+				UGameplayStatics::OpenLevel(GetWorld(), LevelMapNames[CurrentLevelIndex]);
+			}
+			else
+			{
+				OnGameOver();
+			}
 		}
-	}
-	
-	if (CurrentLevelIndex >= MaxLevels)
-	{
-		OnGameOver();
-		return;
-	}
-	
-	// 다음레벨
-	if (LevelMapNames.IsValidIndex(CurrentLevelIndex))
-	{
-		UGameplayStatics::OpenLevel(GetWorld(), LevelMapNames[CurrentLevelIndex]);
-	}
-	else
-	{
-		OnGameOver();
 	}
 }
 
 void AMyGameState::OnGameOver()
 {
 	// Ui, 재시작
-	UpdateHUD();
-	UE_LOG(LogTemp, Warning, TEXT("Game Over!"));
+	if (APlayerController* PlayerController = GetWorld()->GetFirstPlayerController())
+	{
+		if (ASantaPlayerController* SantaPlayerController = Cast<ASantaPlayerController>(PlayerController))
+		{
+			SantaPlayerController->SetPause(true);
+			SantaPlayerController->ShowMainMenu(true);
+		}
+	}
+	
 }
 
 // 텍스트설정

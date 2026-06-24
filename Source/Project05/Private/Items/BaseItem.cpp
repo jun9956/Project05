@@ -1,6 +1,8 @@
 #include "Items/BaseItem.h"
 
 #include "Components/SphereComponent.h"
+#include "Kismet/GameplayStatics.h"
+#include "Particles/ParticleSystemComponent.h"
 
 
 ABaseItem::ABaseItem()
@@ -34,8 +36,7 @@ void ABaseItem::OnItemOverlap(
 {
 	if (OtherActor && OtherActor->ActorHasTag("Player"))
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, FString::Printf(TEXT("Overlap!!!")));
-		
+		// GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, FString::Printf(TEXT("Overlap!!!")));
 		ActivateItem(OtherActor);
 	}
 }
@@ -51,7 +52,39 @@ void ABaseItem::OnItemEndOverlap(
 // 아이템이 사용되었을때 호출
 void ABaseItem::ActivateItem(AActor* Activator)
 {
+	UParticleSystemComponent* Particle = nullptr;
 	
+	if (PickupParticle)
+	{
+		Particle = UGameplayStatics::SpawnEmitterAtLocation(
+			GetWorld(),
+			PickupParticle,
+			GetActorLocation(),
+			GetActorRotation(),
+			false);
+	}
+	
+	if (PickupSound)
+	{
+		UGameplayStatics::PlaySoundAtLocation(
+			GetWorld(),
+			PickupSound,
+			GetActorLocation());
+	}
+	
+	if (Particle)
+	{
+		FTimerHandle DestroyParticleTimerHandle;
+		
+		GetWorld()->GetTimerManager().SetTimer(
+			DestroyParticleTimerHandle,
+			[Particle]()
+			{
+				Particle->DestroyComponent();
+			},
+			2.0f,
+			false);
+	}
 }
 // 이 아이템의 유형(이름 타입)을 반환
 FName ABaseItem::GetItemType() const

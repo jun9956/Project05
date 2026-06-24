@@ -2,13 +2,16 @@
 
 
 #include "Camera/CameraComponent.h"
+#include "Core/SantaPlayerController.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "EnhancedInputComponent.h" // UEnhancedInputComponent, BindAction()
-#include "EnhancedInputSubsystems.h" // UEnhancedInputLocalPlayerSubsystem, AddMappingContext
 #include "InputActionValue.h" // FInputActionValue
-#include "GameFramework/PlayerController.h" // APlayerController
-#include "Engine/LocalPlayer.h" // ULocalPlayer
+#include "Components/TextBlock.h"
+#include "Components/ProgressBar.h"
+#include "Blueprint/UserWidget.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Components/WidgetComponent.h"
+#include "Core/MyGameState.h"
 
 
 ASantaCharacter::ASantaCharacter()
@@ -31,15 +34,18 @@ ASantaCharacter::ASantaCharacter()
 
 	// 몸이 컨트롤러 yaw를 바로 따라가지 않음
 	bUseControllerRotationYaw = true;
-
-	// // 이동 방향으로 캐릭터가 회전
-	// GetCharacterMovement()->bOrientRotationToMovement = true;
-	// GetCharacterMovement()->RotationRate = FRotator(0.0f, 500.0f, 0.0f);
-
+	
+	OverHeadWidget = CreateDefaultSubobject<UWidgetComponent>(TEXT("OverHeadWidget"));
+	OverHeadWidget->SetupAttachment(GetMesh());
+	OverHeadWidget->SetWidgetSpace(EWidgetSpace::Screen);
+	//hp바
+	OverHeadWidget->SetDrawSize(FVector2D(150.0f, 20.0f));
+	OverHeadWidget->SetPivot(FVector2D(0.5f, 0.5f));
+	
 	// 이동/점프 설정
 	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
-	GetCharacterMovement()->JumpZVelocity = 420.0f;
-	GetCharacterMovement()->AirControl = 0.2f;
+	GetCharacterMovement()->JumpZVelocity = 500.0f;
+	GetCharacterMovement()->AirControl = 0.35f;
 	
 	// 체력설정
 	MaxHealth = 100.0f;
@@ -52,17 +58,7 @@ void ASantaCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 	
-	if (APlayerController* PC = Cast<APlayerController>(GetController()))
-	{
-		if (UEnhancedInputLocalPlayerSubsystem* Subsystem =
-			ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()))
-		{
-			if (InputMappingContext)
-			{
-				Subsystem->AddMappingContext(InputMappingContext, 0);
-			}
-		}
-	}
+	UpdateOverheadHP();
 }
 
 void ASantaCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -71,12 +67,15 @@ void ASantaCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
 	
 	if (UEnhancedInputComponent* EIC = Cast<UEnhancedInputComponent>(PlayerInputComponent))
 	{
-		if (MoveAction) EIC->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ASantaCharacter::InputActionMove);
-		if (LookAction) EIC->BindAction(LookAction, ETriggerEvent::Triggered, this, &ASantaCharacter::InputActionLook);
-		if (JumpAction) EIC->BindAction(JumpAction, ETriggerEvent::Started,   this, &ASantaCharacter::InputActionJump);
-		if (JumpAction) EIC->BindAction(JumpAction, ETriggerEvent::Completed, this, &ASantaCharacter::InputActionStopJump);
-		if (SprintAction) EIC->BindAction(SprintAction, ETriggerEvent::Started, this, &ASantaCharacter::StartSprint);
-		if (SprintAction) EIC->BindAction(SprintAction, ETriggerEvent::Completed, this, &ASantaCharacter::StopSprint);
+		if (ASantaPlayerController* SantaPlayerController = Cast<ASantaPlayerController>(GetController()))
+		{
+			if (SantaPlayerController->MoveAction) EIC->BindAction(SantaPlayerController->MoveAction, ETriggerEvent::Triggered, this, &ASantaCharacter::InputActionMove);
+			if (SantaPlayerController->LookAction) EIC->BindAction(SantaPlayerController->LookAction, ETriggerEvent::Triggered, this, &ASantaCharacter::InputActionLook);
+			if (SantaPlayerController->JumpAction) EIC->BindAction(SantaPlayerController->JumpAction, ETriggerEvent::Started,   this, &ASantaCharacter::InputActionJump);
+			if (SantaPlayerController->JumpAction) EIC->BindAction(SantaPlayerController->JumpAction, ETriggerEvent::Completed, this, &ASantaCharacter::InputActionStopJump);
+			if (SantaPlayerController->SprintAction) EIC->BindAction(SantaPlayerController->SprintAction, ETriggerEvent::Started, this, &ASantaCharacter::StartSprint);
+			if (SantaPlayerController->SprintAction) EIC->BindAction(SantaPlayerController->SprintAction, ETriggerEvent::Completed, this, &ASantaCharacter::StopSprint);
+		}
 	}
 }
 
@@ -138,7 +137,7 @@ float ASantaCharacter::GetHealth() const
 void ASantaCharacter::AddHealth(float Amount)
 {
 	Health = FMath::Clamp(Health + Amount, 0.0f, MaxHealth);
-	UE_LOG(LogTemp, Warning, TEXT("Health increased to %f"), Health);
+	UpdateOverheadHP();
 }
 
 float ASantaCharacter::TakeDamage(
@@ -150,7 +149,7 @@ float ASantaCharacter::TakeDamage(
 	float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 	
 	Health = FMath::Clamp(Health - DamageAmount, 0.0f, MaxHealth);
-	UE_LOG(LogTemp, Warning, TEXT("Health decreased to %f"), Health);
+	UpdateOverheadHP();
 	
 	if (Health <= 0.0f)
 	{
@@ -162,5 +161,41 @@ float ASantaCharacter::TakeDamage(
 
 void ASantaCharacter::OnDeath()
 {
-	// 게임 종료 로직
+	AMyGameState* MyGameState = GetWorld() ? GetWorld()->GetGameState<AMyGameState>() : nullptr;
+	if (MyGameState)
+	{
+		MyGameState->OnGameOver();
+	}
 }
+
+void ASantaCharacter::UpdateOverheadHP()
+{
+	if (!OverHeadWidget) return;
+	
+	UUserWidget* OverHeadWidgetInstance = OverHeadWidget->GetUserWidgetObject();
+	if (!OverHeadWidgetInstance) return;
+	
+	// 체력 비율 계산
+	float HealthPercent = 0.0f;
+
+	if (MaxHealth > 0.0f)
+	{
+		HealthPercent = Health / MaxHealth;
+	}
+
+	HealthPercent = FMath::Clamp(HealthPercent, 0.0f, 1.0f);
+
+	// Progress Bar 업데이트
+	if (UProgressBar* HPBar = Cast<UProgressBar>(OverHeadWidgetInstance->GetWidgetFromName(TEXT("OverHeadHPBar"))))
+	{
+		HPBar->SetPercent(HealthPercent);
+	}
+
+	
+	// if (UTextBlock* HPText = Cast<UTextBlock>(OverHeadWidgetInstance->GetWidgetFromName(TEXT("OverHeadHP"))))
+	// {
+	// 	HPText->SetText(FText::FromString(FString::Printf(TEXT("%.0f / %.0f"), Health, MaxHealth)));
+	// }
+	// 	
+}
+
