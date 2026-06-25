@@ -45,7 +45,7 @@ void AMineItem::Explode()
 			ExplosionParticle,
 			GetActorLocation(),
 			GetActorRotation(),
-			false);
+			true);
 	}
 	
 	if (ExplosionSound)
@@ -75,18 +75,28 @@ void AMineItem::Explode()
 	}
 	DestroyItem();
 	
-	if (Particle)
-	{
-		FTimerHandle DestroyParticleTimerHandle;
-		
-		GetWorld()->GetTimerManager().SetTimer(
-			DestroyParticleTimerHandle,
-			[Particle]()
-			{
-				Particle->DestroyComponent();
-			},
-			2.0f,
-			false);
-	}
+	// if (Particle)
+	// {
+	// 	FTimerHandle DestroyParticleTimerHandle;
+	// 	
+	// 	GetWorld()->GetTimerManager().SetTimer(
+	// 		DestroyParticleTimerHandle,
+	// 		[Particle]()
+	// 		{
+	// 			Particle->DestroyComponent();
+	// 		},
+	// 		2.0f,
+	// 		false);
+	// }
 }	
 
+// 타이머 정리
+void AMineItem::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(ExplosionTimerHandle);
+	}
+
+	Super::EndPlay(EndPlayReason);
+}

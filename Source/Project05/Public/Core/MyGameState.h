@@ -4,6 +4,20 @@
 #include "GameFramework/GameState.h"
 #include "MyGameState.generated.h"
 
+// 웨이브 데이터 구조체 
+USTRUCT(BlueprintType)
+struct FWaveData
+{
+	GENERATED_BODY()
+	
+public:
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave")
+	float WaveDuration = 30.0f;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave")
+	int32 ItemToSpawn = 20;
+};
+
 
 UCLASS()
 class PROJECT05_API AMyGameState : public AGameState
@@ -14,6 +28,9 @@ public:
 	AMyGameState();
 	
 	virtual void BeginPlay() override;
+	
+	// 타이머 정리
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Score")
 	int32 Score;
@@ -32,6 +49,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Level")
 	TArray<FName> LevelMapNames;
 	
+	// 웨이브
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wave")
+	TArray<FWaveData> Waves;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wave")
+	int32 CurrentWaveIndex;
+	
+	bool bWaveActive;
+	
 	FTimerHandle LevelTimerHandle;
 	FTimerHandle HUDUpdateTimerHandle;
 	
@@ -43,9 +68,18 @@ public:
 	void OnGameOver();
 	
 	void StartLevel();
-	void OnLevelTimeUp();
 	void OnCoinCollected();
 	void EndLevel();
 	void UpdateHUD();
+	
+	// 웨이브
+	void StartWave();
+	void EndWave();
+	void OnWaveTimeUp();
+	// 코인 지욱기
+	void ClearCurrentWaveCoins();
+	
+	UPROPERTY()
+	TArray<TWeakObjectPtr<AActor>> CurrentWaveCoins;
 	
 };

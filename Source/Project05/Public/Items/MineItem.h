@@ -32,4 +32,7 @@ public:
 	virtual void ActivateItem(AActor* Activator) override;
 	
 	void Explode();
+	
+	// 타이머 정리
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 };

@@ -46,6 +46,13 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Menu")
 	UUserWidget* MainMenuWidgetInstance;
 	
+	// ui 분리
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Menu")
+	TSubclassOf<UUserWidget> GameOverMenuWidgetClass;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Menu")
+	UUserWidget* GameOverMenuWidgetInstance;
+	
 	
 	UFUNCTION(BlueprintPure, Category = "HUD")
 	UUserWidget* GetHUDWidget() const;
@@ -58,4 +65,17 @@ public:
 	// 게임 시작
 	UFUNCTION(BlueprintCallable, Category = "Menu")
 	void StartGame();
+	
+	// ui분리
+	UFUNCTION(BlueprintCallable, Category = "Menu")
+	void ShowGameOverMenu();
+
+	UFUNCTION(BlueprintCallable, Category = "Menu")
+	void RestartGame();
+
+	UFUNCTION(BlueprintCallable, Category = "Menu")
+	void ReturnToMainMenu();
+
+	UFUNCTION(BlueprintCallable, Category = "Menu")
+	void QuitGame();
 };

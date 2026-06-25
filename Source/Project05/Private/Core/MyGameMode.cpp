@@ -2,12 +2,12 @@
 
 #include "Core/MyGameState.h"
 #include "Core/SantaPlayerController.h"
-#include "Characters/ProjectPawn.h"
+#include "Characters/SantaCharacter.h"
 
 
 AMyGameMode::AMyGameMode()
 {
-	DefaultPawnClass = AProjectPawn::StaticClass();
+	DefaultPawnClass = ASantaCharacter::StaticClass();
 	PlayerControllerClass = ASantaPlayerController::StaticClass();
 	GameStateClass = AMyGameState::StaticClass();
 }

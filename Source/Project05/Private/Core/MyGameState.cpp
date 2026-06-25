@@ -7,6 +7,7 @@
 #include "Spawners/SpawnVolume.h"
 #include "Items/CoinItem.h"
 #include "Blueprint/UserWidget.h"
+#include "Engine/Engine.h"
 
 AMyGameState::AMyGameState()
 {
@@ -16,11 +17,26 @@ AMyGameState::AMyGameState()
 	LevelDuration = 6000.0f;
 	CurrentLevelIndex = 0;
 	MaxLevels = 3;
+	
+	// 웨이브
+	CurrentWaveIndex = 0;
+	bWaveActive = false;
+	
+	Waves.Add(FWaveData{30.0f, 15});
+	Waves.Add(FWaveData{25.0f, 20});
+	Waves.Add(FWaveData{600.0f, 30});
 }
 
 void AMyGameState::BeginPlay()
 {
 	Super::BeginPlay();
+	
+	FString CurrentMapName = GetWorld()->GetMapName();
+
+	if (CurrentMapName.Contains(TEXT("MenuLevel")))
+	{
+		return;
+	}
 	
 	StartLevel();
 	
@@ -31,6 +47,19 @@ void AMyGameState::BeginPlay()
 		0.1f,
 		true
 		);
+}
+
+// 타이머 정리
+void AMyGameState::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(LevelTimerHandle);
+		World->GetTimerManager().ClearTimer(HUDUpdateTimerHandle);
+		World->GetTimerManager().ClearAllTimersForObject(this);
+	}
+
+	Super::EndPlay(EndPlayReason);
 }
 
 int32 AMyGameState::GetScore() const
@@ -71,45 +100,11 @@ void AMyGameState::StartLevel()
 		}
 	}
 	
-	SpawnedCoinCount = 0;
-	CollectedCoinCount = 0;
+	// 웨이브
+	CurrentWaveIndex = 0;
+	bWaveActive = false;
 	
-	TArray<AActor*> FoundVolumes;
-	UGameplayStatics::GetAllActorsOfClass(GetWorld(), ASpawnVolume::StaticClass(), FoundVolumes);
-	
-	const int32 ItemToSpawn = 40;
-	
-	// 코인갯수 
-	for (int32 i = 0; i < ItemToSpawn; i++)
-	{
-		if (FoundVolumes.Num() > 0)
-		{
-			ASpawnVolume* SpawnVolume = Cast<ASpawnVolume>(FoundVolumes[0]);
-			if (SpawnVolume)
-			{
-				AActor* SpawnedActor = SpawnVolume->SpawnRandomItem();
-				if (SpawnedActor && SpawnedActor->IsA(ACoinItem::StaticClass()))
-				{
-					SpawnedCoinCount++; 
-				}
-			}
-		}
-	}
-	
-	// 시간설정
-	GetWorldTimerManager().SetTimer(
-		LevelTimerHandle,
-		this,
-		&AMyGameState::OnLevelTimeUp,
-		LevelDuration,
-		false
-		);
-}
-
-// 시간 끝나면 레벨끝내기
-void AMyGameState::OnLevelTimeUp()
-{
-	EndLevel();
+	StartWave();
 }
 
 //코인 먹기
@@ -123,14 +118,20 @@ void AMyGameState::OnCoinCollected()
 	
 	if (SpawnedCoinCount > 0 && CollectedCoinCount >= SpawnedCoinCount)
 	{
-		EndLevel();
+		EndWave();
 	}
 }
 
 // 레벨끝내기
 void AMyGameState::EndLevel()
 {
+	bWaveActive = false;
+	
 	GetWorldTimerManager().ClearTimer(LevelTimerHandle);
+	GetWorldTimerManager().ClearTimer(HUDUpdateTimerHandle);
+	
+	// 코인정리
+	ClearCurrentWaveCoins();
 	
 	if (UGameInstance* GameInstance = GetGameInstance())
 	{
@@ -161,13 +162,19 @@ void AMyGameState::EndLevel()
 
 void AMyGameState::OnGameOver()
 {
+	bWaveActive = false;
+	
+	GetWorldTimerManager().ClearTimer(LevelTimerHandle);
+	GetWorldTimerManager().ClearTimer(HUDUpdateTimerHandle);
+	
+	ClearCurrentWaveCoins();
 	// Ui, 재시작
 	if (APlayerController* PlayerController = GetWorld()->GetFirstPlayerController())
 	{
 		if (ASantaPlayerController* SantaPlayerController = Cast<ASantaPlayerController>(PlayerController))
 		{
 			SantaPlayerController->SetPause(true);
-			SantaPlayerController->ShowMainMenu(true);
+			SantaPlayerController->ShowGameOverMenu();
 		}
 	}
 	
@@ -205,9 +212,127 @@ void AMyGameState::UpdateHUD()
 					
 					LevelIndexText->SetText(FText::FromString(FString::Printf(TEXT("Level: %d"), CurrentLevelIndex + 1)));
 				}
+				
+				if (UTextBlock* WaveText = Cast<UTextBlock>(HUDWidget->GetWidgetFromName("Wave")))
+				{
+					WaveText->SetText(FText::FromString(
+						FString::Printf(TEXT("Wave: %d"), CurrentWaveIndex + 1)
+					));
+				}
 			}
 		}
 	}
+}
+
+// 웨이브
+void AMyGameState::StartWave()
+{
+	if (!Waves.IsValidIndex(CurrentWaveIndex))
+	{
+		EndLevel();
+		return;
+	}
+	
+	bWaveActive = true;
+	
+	SpawnedCoinCount = 0;
+	CollectedCoinCount = 0;
+	CurrentWaveCoins.Empty();
+	
+	const FWaveData& CurrentWave = Waves[CurrentWaveIndex];
+	
+	FString WaveMessage = FString::Printf(
+		TEXT("Level %d - Wave %d 시작!"),
+		CurrentLevelIndex + 1,
+		CurrentWaveIndex + 1);
+	
+	UE_LOG(LogTemp, Warning, TEXT("Wave: %s"), *WaveMessage);
+	
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(
+			-1,
+			2.0f,
+			FColor::Yellow,
+			WaveMessage);
+	}
+	
+	TArray<AActor*> FoundVolumes;
+	UGameplayStatics::GetAllActorsOfClass(GetWorld(), ASpawnVolume::StaticClass(), FoundVolumes);
+
+	for (int32 i = 0; i < CurrentWave.ItemToSpawn; i++)
+	{
+		if (FoundVolumes.Num() > 0)
+		{
+			int32 RandomIndex = FMath::RandRange(0, FoundVolumes.Num() - 1);
+			ASpawnVolume* SpawnVolume = Cast<ASpawnVolume>(FoundVolumes[RandomIndex]);
+
+			if (SpawnVolume)
+			{
+				AActor* SpawnedActor = SpawnVolume->SpawnRandomItem();
+
+				if (ACoinItem* CoinItem = Cast<ACoinItem>(SpawnedActor))
+				{
+					SpawnedCoinCount++;
+					CurrentWaveCoins.Add(CoinItem);
+				}
+			}
+		}
+	}
+
+	GetWorldTimerManager().SetTimer(
+		LevelTimerHandle,
+		this,
+		&AMyGameState::OnWaveTimeUp,
+		CurrentWave.WaveDuration,
+		false
+	);
+}
+
+void AMyGameState::OnWaveTimeUp()
+{
+	// 시간 초과 또는 웨이브 종료 시 남은 코인 제거
+	ClearCurrentWaveCoins();
+	
+	EndWave();
+}
+
+void AMyGameState::EndWave()
+{
+	if (!bWaveActive)
+	{
+		return;
+	}
+
+	bWaveActive = false;
+	
+	GetWorldTimerManager().ClearTimer(LevelTimerHandle);
+	
+	CurrentWaveIndex++;
+
+	if (CurrentWaveIndex >= Waves.Num())
+	{
+		EndLevel();
+	}
+	else
+	{
+		StartWave();
+	}
+}
+
+void AMyGameState::ClearCurrentWaveCoins()
+{
+	for (TWeakObjectPtr<AActor> CoinPtr : CurrentWaveCoins)
+	{
+		AActor* CoinActor = CoinPtr.Get();
+
+		if (IsValid(CoinActor))
+		{
+			CoinActor->Destroy();
+		}
+	}
+
+	CurrentWaveCoins.Empty();
 }
 
 //레벨에서 40개의 아이템 소환

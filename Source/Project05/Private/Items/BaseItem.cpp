@@ -61,7 +61,7 @@ void ABaseItem::ActivateItem(AActor* Activator)
 			PickupParticle,
 			GetActorLocation(),
 			GetActorRotation(),
-			false);
+			true);
 	}
 	
 	if (PickupSound)
@@ -72,19 +72,19 @@ void ABaseItem::ActivateItem(AActor* Activator)
 			GetActorLocation());
 	}
 	
-	if (Particle)
-	{
-		FTimerHandle DestroyParticleTimerHandle;
-		
-		GetWorld()->GetTimerManager().SetTimer(
-			DestroyParticleTimerHandle,
-			[Particle]()
-			{
-				Particle->DestroyComponent();
-			},
-			2.0f,
-			false);
-	}
+	// if (Particle)
+	// {
+	// 	FTimerHandle DestroyParticleTimerHandle;
+	// 	
+	// 	GetWorld()->GetTimerManager().SetTimer(
+	// 		DestroyParticleTimerHandle,
+	// 		[Particle]()
+	// 		{
+	// 			Particle->DestroyComponent();
+	// 		},
+	// 		2.0f,
+	// 		false);
+	// }
 }
 // 이 아이템의 유형(이름 타입)을 반환
 FName ABaseItem::GetItemType() const

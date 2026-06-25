@@ -12,12 +12,13 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/WidgetComponent.h"
 #include "Core/MyGameState.h"
+#include "Engine/Engine.h"
 
 
 ASantaCharacter::ASantaCharacter()
 {
  	
-	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true;
 	
 	// SpringArm — RootComponent(캡슐)에 붙임
 	SpringArmComponent = CreateDefaultSubobject<USpringArmComponent>(TEXT("SpringArmComponent"));
@@ -58,7 +59,18 @@ void ASantaCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 	
+	UpdateMovementSpeed();
+	
 	UpdateOverheadHP();
+}
+
+void ASantaCharacter::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	// 매 프레임 디버프 시간이 끝났는지 확인한다.
+	// 시간이 끝난 디버프는 배열에서 제거된다.
+	UpdateSlowDebuff();
 }
 
 void ASantaCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -120,12 +132,16 @@ void ASantaCharacter::InputActionStopJump(const FInputActionValue& Value)
 
 void ASantaCharacter::StartSprint()
 {
-	GetCharacterMovement()->MaxWalkSpeed = SprintSpeed;
+	bIsSprinting = true;
+	
+	UpdateMovementSpeed();
 }
 
 void ASantaCharacter::StopSprint()
 {
-	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
+	bIsSprinting = false;
+	
+	UpdateMovementSpeed();
 }
 
 
@@ -190,8 +206,6 @@ void ASantaCharacter::UpdateOverheadHP()
 	{
 		HPBar->SetPercent(HealthPercent);
 	}
-
-	
 	// if (UTextBlock* HPText = Cast<UTextBlock>(OverHeadWidgetInstance->GetWidgetFromName(TEXT("OverHeadHP"))))
 	// {
 	// 	HPText->SetText(FText::FromString(FString::Printf(TEXT("%.0f / %.0f"), Health, MaxHealth)));
@@ -199,3 +213,103 @@ void ASantaCharacter::UpdateOverheadHP()
 	// 	
 }
 
+void ASantaCharacter::ApplySlowDebuff(float Duration)
+{
+	if (Duration <= 0.0f || GetWorld() == nullptr)
+	{
+		return;
+	}
+	
+	// 현재 시간 + 지속 시갖 = Slow가 끝나는 시간
+	const float EndTime = GetWorld()->GetTimeSeconds() + Duration;
+
+	// 배열에 끝나는 시간 추가
+	SlowEndTimes.Add(EndTime);
+	
+	// slow가 적용되었으므로 이동 속도 다시 업데이트
+	UpdateMovementSpeed();
+	
+	// 테스트용 화면 메시지
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(
+			-1,
+			2.0f,
+			FColor::Cyan,
+			FString::Printf(TEXT("Slow 시작! 중첩: x%d"), SlowEndTimes.Num())
+		);
+	}
+}
+
+void ASantaCharacter::UpdateSlowDebuff()
+{
+	if (GetWorld() == nullptr)
+	{
+		return;
+	}
+	
+	const float CurrentTime = GetWorld()->GetTimeSeconds();
+	
+	// 슬로우 중첩 갯수 저장
+	const int32 PreviousSlowCount = SlowEndTimes.Num();
+	
+	// 시간이 끝나고 슬로우 디버프 제거
+	// 배열은 뒤부터 지워야 인덱스가 안꼬임
+	for (int32 i = SlowEndTimes.Num() - 1; i >= 0; i--)
+	{
+		if (SlowEndTimes[i] <= CurrentTime)
+		{
+			SlowEndTimes.RemoveAt(i);
+		}
+	}
+	
+	// 슬로우 중첩수가 바뀌었다면 속도 다시 계산
+	if (PreviousSlowCount != SlowEndTimes.Num())
+	{
+		UpdateMovementSpeed();
+		
+		if (PreviousSlowCount > 0 && SlowEndTimes.Num() <=0)
+		{
+			if (GEngine)
+			{
+				GEngine->AddOnScreenDebugMessage(
+					-1,
+					2.0f,
+					FColor::Green,
+					TEXT("Slow 종료!")
+				);
+			}
+		}
+	}
+}
+
+void ASantaCharacter::UpdateMovementSpeed()
+{
+	// 기본 걷기 속도
+	float CurrentBaseSpeed = WalkSpeed;
+	
+	// 달리는 중이면 달리기 속도 기준으로 사용
+	if (bIsSprinting)
+	{
+		CurrentBaseSpeed = SprintSpeed;
+	}
+	
+	//기본 배율
+	float FinalSpeedMultiplier = 1.0f;
+	
+	// 슬로우가 하나라도 있으면 중첩수에 따라 속도 감소
+	if (SlowEndTimes.Num() > 0)
+	{
+		// 1중첩 0.5 2중첩 0.25 
+		FinalSpeedMultiplier = FMath::Pow(SlowMultiplierPerStack, SlowEndTimes.Num());
+		
+		// 최소 속도 제한
+		FinalSpeedMultiplier = FMath::Clamp(
+			FinalSpeedMultiplier,
+			MinSlowSpeedMultiplier,
+			1.0f);
+	}
+	
+	// 최종 이동 속도 적용
+	GetCharacterMovement()->MaxWalkSpeed = CurrentBaseSpeed * FinalSpeedMultiplier;
+}

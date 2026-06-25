@@ -16,7 +16,9 @@ ASantaPlayerController::ASantaPlayerController()
 	  HUDWidgetClass(nullptr),
 	  HUDWidgetInstance(nullptr),
       MainMenuWidgetClass(nullptr),
-	  MainMenuWidgetInstance(nullptr)
+      MainMenuWidgetInstance(nullptr),
+      GameOverMenuWidgetClass(nullptr),
+      GameOverMenuWidgetInstance(nullptr)
 {
 }
 
@@ -77,10 +79,17 @@ void ASantaPlayerController::ShowMainMenu(bool bIsRestart)
 		MainMenuWidgetInstance = nullptr;
 	}
 	
+	if (GameOverMenuWidgetInstance)
+	{
+		GameOverMenuWidgetInstance->RemoveFromParent();
+		GameOverMenuWidgetInstance = nullptr;
+	}
+	
 	// 메뉴 UI 생성
 	if (MainMenuWidgetClass)
 	{		
 		MainMenuWidgetInstance = CreateWidget<UUserWidget>(this, MainMenuWidgetClass);
+
 		if (MainMenuWidgetInstance)
 		{
 			MainMenuWidgetInstance->AddToViewport();
@@ -88,35 +97,51 @@ void ASantaPlayerController::ShowMainMenu(bool bIsRestart)
 			bShowMouseCursor = true;
 			SetInputMode(FInputModeUIOnly());
 		}
-		
-		if (UTextBlock* ButtonText = Cast<UTextBlock>(MainMenuWidgetInstance->GetWidgetFromName(TEXT("StartButtonText"))))
+	}
+}
+
+// ui추가
+void ASantaPlayerController::ShowGameOverMenu()
+{
+	if (HUDWidgetInstance)
+	{
+		HUDWidgetInstance->RemoveFromParent();
+		HUDWidgetInstance = nullptr;
+	}
+
+	if (MainMenuWidgetInstance)
+	{
+		MainMenuWidgetInstance->RemoveFromParent();
+		MainMenuWidgetInstance = nullptr;
+	}
+
+	if (GameOverMenuWidgetInstance)
+	{
+		GameOverMenuWidgetInstance->RemoveFromParent();
+		GameOverMenuWidgetInstance = nullptr;
+	}
+
+	if (GameOverMenuWidgetClass)
+	{
+		GameOverMenuWidgetInstance = CreateWidget<UUserWidget>(this, GameOverMenuWidgetClass);
+
+		if (GameOverMenuWidgetInstance)
 		{
-			if (bIsRestart)
+			GameOverMenuWidgetInstance->AddToViewport();
+
+			if (UTextBlock* TotalScoreText = Cast<UTextBlock>(
+				GameOverMenuWidgetInstance->GetWidgetFromName(TEXT("TotalScoreText"))))
 			{
-				ButtonText->SetText(FText::FromString(TEXT("Restart")));
-			}
-			else
-			{
-				ButtonText->SetText(FText::FromString(TEXT("Start")));
-			}
-		}
-		
-		if (bIsRestart)
-		{
-			UFunction* PlayAnimFunc= MainMenuWidgetInstance->FindFunction(FName("PlayGameOverAnim"));
-			if (PlayAnimFunc)
-			{
-				MainMenuWidgetInstance->ProcessEvent(PlayAnimFunc, nullptr);
-			}
-			
-			if (UTextBlock* TotalScoreText = Cast<UTextBlock>(MainMenuWidgetInstance->GetWidgetFromName("TotalScoreText")))
-			{
-				if (UMyGameInstance* MYGameInstance = Cast<UMyGameInstance>(UGameplayStatics::GetGameInstance(this)))
+				if (UMyGameInstance* MyGameInstance = Cast<UMyGameInstance>(UGameplayStatics::GetGameInstance(this)))
 				{
 					TotalScoreText->SetText(FText::FromString(
-						FString::Printf(TEXT("Total Score: %d"), MYGameInstance->TotalScore)));
+						FString::Printf(TEXT("Total Score: %d"), MyGameInstance->TotalScore)
+					));
 				}
 			}
+
+			bShowMouseCursor = true;
+			SetInputMode(FInputModeUIOnly());
 		}
 	}
 }
@@ -138,6 +163,12 @@ void ASantaPlayerController::ShowGameHUD()
 		MainMenuWidgetInstance = nullptr;
 	}
 	
+	// ui추가
+	if (GameOverMenuWidgetInstance)
+	{
+		GameOverMenuWidgetInstance->RemoveFromParent();
+		GameOverMenuWidgetInstance = nullptr;
+	}
 	
 	if (HUDWidgetClass)
 	{		
@@ -169,4 +200,36 @@ void ASantaPlayerController::StartGame()
 	
 	UGameplayStatics::OpenLevel(GetWorld(),FName("SnowMap"));
 	SetPause(false);
+}
+void ASantaPlayerController::RestartGame()
+{
+	if (UMyGameInstance* MyGameInstance = Cast<UMyGameInstance>(UGameplayStatics::GetGameInstance(this)))
+	{
+		MyGameInstance->CurrentLevelIndex = 0;
+		MyGameInstance->TotalScore = 0;
+	}
+	
+	SetPause(false);
+	UGameplayStatics::OpenLevel(GetWorld(), FName("SnowMap"));
+}
+
+void ASantaPlayerController::ReturnToMainMenu()
+{
+	if (UMyGameInstance* MyGameInstance = Cast<UMyGameInstance>(UGameplayStatics::GetGameInstance(this)))
+	{
+		MyGameInstance->CurrentLevelIndex = 0;
+		MyGameInstance->TotalScore = 0;
+	}
+	
+	SetPause(false);
+	UGameplayStatics::OpenLevel(GetWorld(), FName("MenuLevel"));
+}
+void ASantaPlayerController::QuitGame()
+{
+	UKismetSystemLibrary::QuitGame(
+		this,
+		this,
+		EQuitPreference::Quit,
+		true
+	);
 }
