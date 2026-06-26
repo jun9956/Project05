@@ -15,7 +15,7 @@ public:
 protected:
 	
 	// 슬로우 지속시간
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, category = "Item|Buff")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, category = "Item|DeBuff")
 	float DebuffDuration;
 	
 	virtual void ActivateItem(AActor* Activator) override;

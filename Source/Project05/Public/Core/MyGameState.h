@@ -59,6 +59,8 @@ public:
 	
 	FTimerHandle LevelTimerHandle;
 	FTimerHandle HUDUpdateTimerHandle;
+	// 웨이브별 아이템추가 테스트
+	FTimerHandle WaveEventMessageTimerHandle;
 	
 	UFUNCTION(BlueprintPure, Category = "Score")
 	int32 GetScore() const;
@@ -81,5 +83,9 @@ public:
 	
 	UPROPERTY()
 	TArray<TWeakObjectPtr<AActor>> CurrentWaveCoins;
+	
+	// 웨이브별 아이템추가 테스트
+	void ShowWaveEventMessage(const FText& Message, float Duration = 3.0f);
+	void HideWaveEventMessage();
 	
 };

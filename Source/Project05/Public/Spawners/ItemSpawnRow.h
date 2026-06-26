@@ -19,4 +19,8 @@ public:
 	TSubclassOf<AActor> ItemClass = nullptr;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	float SpawnChance = 0.0f;
+	
+	// 웨이브별 데이터테이블 해금
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	int32 UnlockWave = 1;
 };

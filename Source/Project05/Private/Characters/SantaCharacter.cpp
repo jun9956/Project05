@@ -1,5 +1,7 @@
 #include "Characters/SantaCharacter.h"
 
+#include <rapidjson/internal/meta.h>
+
 
 #include "Camera/CameraComponent.h"
 #include "Core/SantaPlayerController.h"
@@ -70,7 +72,7 @@ void ASantaCharacter::Tick(float DeltaTime)
 
 	// 매 프레임 디버프 시간이 끝났는지 확인한다.
 	// 시간이 끝난 디버프는 배열에서 제거된다.
-	UpdateSlowDebuff();
+	UpdateDebuff();
 }
 
 void ASantaCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -95,12 +97,22 @@ void ASantaCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
 
 void ASantaCharacter::InputActionMove(const FInputActionValue& Value)
 {
-	const FVector2D MoveVec = Value.Get<FVector2D>();
+	FVector2D MoveVec = Value.Get<FVector2D>();
 	if (Controller == nullptr)
 	{
 		return;
 	}
 
+	// ReverseControl 디버프가 하나라도 적용 중이면 입력 방향을 반대로 바꾼다.
+	// W → 뒤로
+	// S → 앞으로
+	// A → 오른쪽
+	// D → 왼쪽
+	if (ReverseControlEndTimes.Num() > 0)
+	{
+		MoveVec *= -1.0f;
+	}
+	
 	// 카메라 yaw 방향 기준으로 forward/right 계산
 	const FRotator Rotation = Controller->GetControlRotation();
 	const FRotator YawRotation(0, Rotation.Yaw, 0);  // pitch/roll 0, yaw만
@@ -241,7 +253,32 @@ void ASantaCharacter::ApplySlowDebuff(float Duration)
 	}
 }
 
-void ASantaCharacter::UpdateSlowDebuff()
+void ASantaCharacter::ApplyReverseControlDebuff(float Duration)
+{
+	if (Duration <= 0.0f || GetWorld() == nullptr)
+	{
+		return;
+	}
+	
+	// 현재 시간 + 지속시간 = 디버프 끝나는 시간
+	const float EndTime = GetWorld()->GetTimeSeconds() + Duration;
+	
+	// 배열에 끝나는 시간 추가
+	ReverseControlEndTimes.Add(EndTime);
+	
+	// 테스트용 화면 메시지
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(
+			-1,
+			2.0f,
+			FColor::Red,
+			FString::Printf(TEXT("조작 반전 시작! 중첩: x%d"), ReverseControlEndTimes.Num())
+		);
+	}
+}
+
+void ASantaCharacter::UpdateDebuff()
 {
 	if (GetWorld() == nullptr)
 	{
@@ -252,6 +289,7 @@ void ASantaCharacter::UpdateSlowDebuff()
 	
 	// 슬로우 중첩 갯수 저장
 	const int32 PreviousSlowCount = SlowEndTimes.Num();
+	const int32 PreviousReverseCount = ReverseControlEndTimes.Num();
 	
 	// 시간이 끝나고 슬로우 디버프 제거
 	// 배열은 뒤부터 지워야 인덱스가 안꼬임
@@ -260,6 +298,15 @@ void ASantaCharacter::UpdateSlowDebuff()
 		if (SlowEndTimes[i] <= CurrentTime)
 		{
 			SlowEndTimes.RemoveAt(i);
+		}
+	}
+	
+	// ReverseControl 디버프 중 시간이 끝난 것 제거
+	for (int32 i = ReverseControlEndTimes.Num() - 1; i >= 0; i--)
+	{
+		if (ReverseControlEndTimes[i] <= CurrentTime)
+		{
+			ReverseControlEndTimes.RemoveAt(i);
 		}
 	}
 	
@@ -281,6 +328,21 @@ void ASantaCharacter::UpdateSlowDebuff()
 			}
 		}
 	}
+	
+	// ReverseControl이 완전히 끝났을 때 메시지 출력
+	if (PreviousReverseCount > 0 && ReverseControlEndTimes.Num() <= 0)
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(
+				-1,
+				2.0f,
+				FColor::Green,
+				TEXT("조작 반전 종료!")
+			);
+		}
+	}
+
 }
 
 void ASantaCharacter::UpdateMovementSpeed()
@@ -312,4 +374,46 @@ void ASantaCharacter::UpdateMovementSpeed()
 	
 	// 최종 이동 속도 적용
 	GetCharacterMovement()->MaxWalkSpeed = CurrentBaseSpeed * FinalSpeedMultiplier;
+}
+
+int32 ASantaCharacter::GetSlowStackCount() const
+{
+	// SlowEndTimes 배열 개수 = Slow 중첩 수
+	return SlowEndTimes.Num();
+}
+
+int32 ASantaCharacter::GetReverseControlStackCount() const
+{
+	// ReverseControlEndTimes 배열 개수 = 조작 반전 중첩 수
+	return ReverseControlEndTimes.Num();
+}
+
+float ASantaCharacter::GetSlowRemainingTime() const
+{
+	// Slow 중첩 중 가장 오래 남은 시간 반환
+	return GetMaxRemainingTime(SlowEndTimes);
+}
+
+float ASantaCharacter::GetReverseControlRemainingTime() const
+{
+	// ReverseControl 중첩 중 가장 오래 남은 시간 반환
+	return GetMaxRemainingTime(ReverseControlEndTimes);
+}
+
+float ASantaCharacter::GetMaxRemainingTime(const TArray<float>& EndTimes) const
+{
+	if (GetWorld() == nullptr || EndTimes.Num() <= 0)
+	{
+		return 0.0f;
+	}
+
+	const float CurrentTime = GetWorld()->GetTimeSeconds();
+	float MaxRemainingTime = 0.0f;
+
+	for (float EndTime : EndTimes)
+	{
+		MaxRemainingTime = FMath::Max(MaxRemainingTime, EndTime - CurrentTime);
+	}
+
+	return FMath::Max(MaxRemainingTime, 0.0f);
 }

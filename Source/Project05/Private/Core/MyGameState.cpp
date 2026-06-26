@@ -9,6 +9,10 @@
 #include "Blueprint/UserWidget.h"
 #include "Engine/Engine.h"
 
+#include "Components/Widget.h"
+#include "Characters/SantaCharacter.h"
+
+
 AMyGameState::AMyGameState()
 {
 	Score = 0;
@@ -56,6 +60,7 @@ void AMyGameState::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	{
 		World->GetTimerManager().ClearTimer(LevelTimerHandle);
 		World->GetTimerManager().ClearTimer(HUDUpdateTimerHandle);
+		World->GetTimerManager().ClearTimer(WaveEventMessageTimerHandle);
 		World->GetTimerManager().ClearAllTimersForObject(this);
 	}
 
@@ -219,6 +224,108 @@ void AMyGameState::UpdateHUD()
 						FString::Printf(TEXT("Wave: %d"), CurrentWaveIndex + 1)
 					));
 				}
+				
+				if (ASantaCharacter* SantaCharacter = Cast<ASantaCharacter>(SantaPlayerController->GetPawn()))
+				{
+					
+					const int32 SlowStackCount = SantaCharacter->GetSlowStackCount();
+
+					if (UWidget* SlowDebuffBox = HUDWidget->GetWidgetFromName(TEXT("SlowDebuffBox")))
+					{
+						// Slow가 적용 중이면 보이게, 아니면 숨김
+						SlowDebuffBox->SetVisibility(
+							SlowStackCount > 0 ? ESlateVisibility::Visible : ESlateVisibility::Hidden
+						);
+					}
+
+					if (UTextBlock* SlowTimeText = Cast<UTextBlock>(HUDWidget->GetWidgetFromName(TEXT("SlowTimeText"))))
+					{
+						SlowTimeText->SetText(FText::FromString(
+							FString::Printf(TEXT("%.1f초"), SantaCharacter->GetSlowRemainingTime())
+						));
+					}
+
+					if (UTextBlock* SlowStackText = Cast<UTextBlock>(HUDWidget->GetWidgetFromName(TEXT("SlowStackText"))))
+					{
+						SlowStackText->SetText(FText::FromString(
+							FString::Printf(TEXT("x%d"), SlowStackCount)
+						));
+					}
+					
+					const int32 ReverseStackCount = SantaCharacter->GetReverseControlStackCount();
+
+					if (UWidget* ReverseDebuffBox = HUDWidget->GetWidgetFromName(TEXT("ReverseDebuffBox")))
+					{
+						// 조작 반전이 적용 중이면 보이게, 아니면 숨김
+						ReverseDebuffBox->SetVisibility(
+							ReverseStackCount > 0 ? ESlateVisibility::Visible : ESlateVisibility::Hidden
+						);
+					}
+
+					if (UTextBlock* ReverseTimeText = Cast<UTextBlock>(HUDWidget->GetWidgetFromName(TEXT("ReverseTimeText"))))
+					{
+						ReverseTimeText->SetText(FText::FromString(
+							FString::Printf(TEXT("%.1f초"), SantaCharacter->GetReverseControlRemainingTime())
+						));
+					}
+
+					if (UTextBlock* ReverseStackText = Cast<UTextBlock>(HUDWidget->GetWidgetFromName(TEXT("ReverseStackText"))))
+					{
+						ReverseStackText->SetText(FText::FromString(
+							FString::Printf(TEXT("x%d"), ReverseStackCount)
+						));
+					}
+				}
+			}
+		}
+	}
+}
+
+// 웨이브별 아이템추가 테스트
+void AMyGameState::ShowWaveEventMessage(const FText& Message, float Duration)
+{
+	if (APlayerController* PlayerController = GetWorld()->GetFirstPlayerController())
+	{
+		if (ASantaPlayerController* SantaPlayerController = Cast<ASantaPlayerController>(PlayerController))
+		{
+			if (UUserWidget* HUDWidget = SantaPlayerController->GetHUDWidget())
+			{
+				if (UWidget* WaveEventBox = HUDWidget->GetWidgetFromName(TEXT("WaveEventBox")))
+				{
+					WaveEventBox->SetVisibility(ESlateVisibility::Visible);
+				}
+
+				if (UTextBlock* WaveEventText = Cast<UTextBlock>(HUDWidget->GetWidgetFromName(TEXT("WaveEventText"))))
+				{
+					WaveEventText->SetText(Message);
+				}
+			}
+		}
+	}
+
+	GetWorldTimerManager().ClearTimer(WaveEventMessageTimerHandle);
+
+	GetWorldTimerManager().SetTimer(
+		WaveEventMessageTimerHandle,
+		this,
+		&AMyGameState::HideWaveEventMessage,
+		Duration,
+		false
+	);
+}
+
+void AMyGameState::HideWaveEventMessage()
+{
+	if (APlayerController* PlayerController = GetWorld()->GetFirstPlayerController())
+	{
+		if (ASantaPlayerController* SantaPlayerController = Cast<ASantaPlayerController>(PlayerController))
+		{
+			if (UUserWidget* HUDWidget = SantaPlayerController->GetHUDWidget())
+			{
+				if (UWidget* WaveEventBox = HUDWidget->GetWidgetFromName(TEXT("WaveEventBox")))
+				{
+					WaveEventBox->SetVisibility(ESlateVisibility::Hidden);
+				}
 			}
 		}
 	}
@@ -241,6 +348,29 @@ void AMyGameState::StartWave()
 	
 	const FWaveData& CurrentWave = Waves[CurrentWaveIndex];
 	
+	// 테스트
+	if (GEngine)
+	{
+		if (CurrentWaveIndex == 1)
+		{
+			GEngine->AddOnScreenDebugMessage(
+				-1,
+				3.0f,
+				FColor::Cyan,
+				TEXT("슬로우 디버프 아이템이 등장했습니다!")
+			);
+		}
+		else if (CurrentWaveIndex == 2)
+		{
+			GEngine->AddOnScreenDebugMessage(
+				-1,
+				3.0f,
+				FColor::Red,
+				TEXT("위험! 조작 반전 디버프와 지뢰가 등장했습니다!")
+			);
+		}
+	}
+	
 	FString WaveMessage = FString::Printf(
 		TEXT("Level %d - Wave %d 시작!"),
 		CurrentLevelIndex + 1,
@@ -248,14 +378,20 @@ void AMyGameState::StartWave()
 	
 	UE_LOG(LogTemp, Warning, TEXT("Wave: %s"), *WaveMessage);
 	
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(
-			-1,
-			2.0f,
-			FColor::Yellow,
-			WaveMessage);
-	}
+		if (CurrentWaveIndex == 1)
+		{
+			ShowWaveEventMessage(
+				FText::FromString(TEXT("슬로우 디버프 아이템이 등장했습니다!")),
+				3.0f
+			);
+		}
+		else if (CurrentWaveIndex == 2)
+		{
+			ShowWaveEventMessage(
+				FText::FromString(TEXT("위험! 조작 반전 디버프와 지뢰가 등장했습니다!")),
+				3.0f
+			);
+		}
 	
 	TArray<AActor*> FoundVolumes;
 	UGameplayStatics::GetAllActorsOfClass(GetWorld(), ASpawnVolume::StaticClass(), FoundVolumes);
@@ -269,7 +405,7 @@ void AMyGameState::StartWave()
 
 			if (SpawnVolume)
 			{
-				AActor* SpawnedActor = SpawnVolume->SpawnRandomItem();
+				AActor* SpawnedActor = SpawnVolume->SpawnRandomItem(CurrentWaveIndex + 1);
 
 				if (ACoinItem* CoinItem = Cast<ACoinItem>(SpawnedActor))
 				{

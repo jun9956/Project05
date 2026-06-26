@@ -56,8 +56,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Debuff")
 	void ApplySlowDebuff(float Duration);
 	
-	// UFUNCTION(BlueprintPure, Category = "Debuff")
-	// FText GetDebuffStatusText() const;
+	// 조작 반전 디버프를 적용하는 함수
+	// ReverseControlItem이 플레이어에게 이 함수를 호출한다.
+	UFUNCTION(BlueprintCallable, Category = "Debuff")
+	void ApplyReverseControlDebuff(float Duration);
 
 protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
@@ -90,6 +92,11 @@ protected:
 	// 슬로우디버프 끝나는 시간 저장
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Debuff")
 	TArray<float> SlowEndTimes;
+	
+	// ReverseControl 디버프가 끝나는 시간들을 저장하는 배열
+	// 여러 번 먹으면 Reverse x2, Reverse x3처럼 중첩 개수를 표시할 수 있다.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Debuff")
+	TArray<float> ReverseControlEndTimes;
 
 protected:
 	void InputActionMove(const struct FInputActionValue& Value);
@@ -104,9 +111,26 @@ protected:
 	void UpdateOverheadHP();
 	
 	// 짖버프 업데이트
-	void UpdateSlowDebuff();
+	void UpdateDebuff();
 	//현재상테에 맞게 속도 계산
 	void UpdateMovementSpeed();
 	// 디버프 배열에서 가장 오래된 시간 구하기
 	float GetMaxRemainingTime(const TArray<float>& EndTimes) const;
+	
+public:
+	// Slow 디버프 중첩 수를 반환
+	UFUNCTION(BlueprintPure, Category = "Debuff")
+	int32 GetSlowStackCount() const;
+
+	// ReverseControl 디버프 중첩 수를 반환
+	UFUNCTION(BlueprintPure, Category = "Debuff")
+	int32 GetReverseControlStackCount() const;
+
+	// Slow 디버프 남은 시간 반환
+	UFUNCTION(BlueprintPure, Category = "Debuff")
+	float GetSlowRemainingTime() const;
+
+	// ReverseControl 디버프 남은 시간 반환
+	UFUNCTION(BlueprintPure, Category = "Debuff")
+	float GetReverseControlRemainingTime() const;
 };

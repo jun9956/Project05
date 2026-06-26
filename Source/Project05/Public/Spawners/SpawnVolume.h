@@ -23,7 +23,9 @@ public:
 	UDataTable* ItemDataTable;
 
 	UFUNCTION(BlueprintCallable, category = "Spawning")
-	AActor* SpawnRandomItem();
+	AActor* SpawnRandomItem(int32 CurrentWaveNumber);
+	
+	FItemSpawnRow* GetRandomItem(int32 CurrentWaveNumber) const;
 	
 	FItemSpawnRow* GetRandomItem() const;
 	AActor* SpawnItem(TSubclassOf<AActor> ItemClass);

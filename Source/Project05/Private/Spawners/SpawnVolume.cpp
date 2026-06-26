@@ -14,9 +14,9 @@ ASpawnVolume::ASpawnVolume()
 	ItemDataTable = nullptr;
 }
 
-AActor* ASpawnVolume::SpawnRandomItem()
+AActor* ASpawnVolume::SpawnRandomItem(int32 CurrentWaveNumber)
 {
-	if (FItemSpawnRow* SelectedRow = GetRandomItem())
+	if (FItemSpawnRow* SelectedRow = GetRandomItem(CurrentWaveNumber))
 	{
 		if (UClass* ActualClass = SelectedRow-> ItemClass.Get())
 		{
@@ -27,7 +27,7 @@ AActor* ASpawnVolume::SpawnRandomItem()
 	return nullptr;
 }
 
-FItemSpawnRow* ASpawnVolume::GetRandomItem() const
+FItemSpawnRow* ASpawnVolume::GetRandomItem(int32 CurrentWaveNumber) const
 {
 	if (!ItemDataTable) return nullptr;
 	
@@ -37,8 +37,20 @@ FItemSpawnRow* ASpawnVolume::GetRandomItem() const
 	
 	if (AllRows.IsEmpty()) return nullptr;
 	
+	TArray<FItemSpawnRow*> AvailableRows;
+
+	for (FItemSpawnRow* Row : AllRows)
+	{
+		if (Row && Row->UnlockWave <= CurrentWaveNumber && Row->SpawnChance > 0.0f)
+		{
+			AvailableRows.Add(Row);
+		}
+	}
+
+	if (AvailableRows.IsEmpty()) return nullptr;
+	
 	float TotalChance = 0.0f;
-	for (const FItemSpawnRow* Row : AllRows)
+	for (const FItemSpawnRow* Row : AvailableRows)
 	{
 		if (Row)
 		{
@@ -46,10 +58,12 @@ FItemSpawnRow* ASpawnVolume::GetRandomItem() const
 		}
 	}
 	
+	if (TotalChance <= 0.0f) return nullptr;
+	
 	const float RandValue = FMath::FRandRange(0.0f, TotalChance);
 	float AccumulateChance = 0.0f;
 	
-	for (FItemSpawnRow* Row : AllRows)
+	for (FItemSpawnRow* Row : AvailableRows)
 	{
 		AccumulateChance += Row->SpawnChance;
 		if (RandValue <= AccumulateChance)
